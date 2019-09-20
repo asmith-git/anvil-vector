@@ -31,6 +31,19 @@ namespace anvil { namespace vector {
 			}
 		}
 
+		template<class T, uint32_t SIZE, const uint64_t MASK>
+		static inline void _and_implement(const T* const lhs, const T* const rhs, const T* default_, T* const dst) throw() {
+			if constexpr ((MASK & 1u) == 0u) {
+				*dst = *default_;
+			} else {
+				*dst = *lhs & *rhs;
+			}
+			if constexpr (SIZE > 1u) {
+				enum : uint64_t { MASK2 = MASK >> 1u };
+				_and_implement<T, SIZE - 1u, MASK2>(lhs + 1u, rhs + 1u, default_ + 1u, dst + 1u);
+			}
+		}
+
 		template<uint32_t BYTES>
 		static inline void _or_nomask_implement(const void* const lhs, const void* const rhs, void* const dst) throw() {
 			const uint64_t* const l = static_cast<const uint64_t*>(lhs);
@@ -42,6 +55,19 @@ namespace anvil { namespace vector {
 			}
 		}
 
+		template<class T, uint32_t SIZE, const uint64_t MASK>
+		static inline void _or_implement(const T* const lhs, const T* const rhs, const T* default_, T* const dst) throw() {
+			if constexpr ((MASK & 1u) == 0u) {
+				*dst = *default_;
+			} else {
+				*dst = *lhs | *rhs;
+			}
+			if constexpr (SIZE > 1u) {
+				enum : uint64_t { MASK2 = MASK >> 1u };
+				_or_implement<T, SIZE - 1u, MASK2>(lhs + 1u, rhs + 1u, default_ + 1u, dst + 1u);
+			}
+		}
+
 		template<uint32_t BYTES>
 		static inline void _xor_nomask_implement(const void* const lhs, const void* const rhs, void* const dst) throw() {
 			const uint64_t* const l = static_cast<const uint64_t*>(lhs);
@@ -50,6 +76,19 @@ namespace anvil { namespace vector {
 			enum : uint32_t { LOOP = BYTES / 8u };
 			for (uint32_t i = 0u; i < LOOP; ++i) {
 				d[i] = l[i] ^ r[i];
+			}
+		}
+
+		template<class T, uint32_t SIZE, const uint64_t MASK>
+		static inline void _xor_implement(const T* const lhs, const T* const rhs, const T* default_, T* const dst) throw() {
+			if constexpr ((MASK & 1u) == 0u) {
+				*dst = *default_;
+			} else {
+				*dst = *lhs ^ *rhs;
+			}
+			if constexpr (SIZE > 1u) {
+				enum : uint64_t { MASK2 = MASK >> 1u };
+				_xor_implement<T, SIZE - 1u, MASK2>(lhs + 1u, rhs + 1u, default_ + 1u, dst + 1u);
 			}
 		}
 
@@ -99,24 +138,72 @@ namespace anvil { namespace vector {
 	}
 
 	template<class T, class V>
-	static inline V _and_nomask(const V& lhs, const V& rhs) throw() {
+	static inline V _and(const V& lhs, const V& rhs) throw() {
 		V dst;
 		detail::_and_nomask_implement<sizeof(V)>(&lhs, &rhs, &dst);
 		return dst;
 	}
 
+	template<class T, const uint64_t MASK, class V>
+	static inline V _and(const V& lhs, const V& rhs, const V& default_) throw() {
+		enum : uint64_t {
+			ALL_SET = detail::_default_mask<sizeof(V) / sizeof(T)>(),
+			MASK2 = MASK & ALL_SET
+		};
+		if constexpr (MASK2 == 0ull) {
+		} else if constexpr(MASK2 == ALL_SET) {
+		} else {
+			V dst;
+			typedef typename detail::_blend_type<sizeof(T)>::type T2;
+			detail::_and_implement<T2, sizeof(V) / sizeof(T2), MASK2>(reinterpret_cast<const T2*>(&lhs), reinterpret_cast<const T2*>(&rhs), reinterpret_cast<const T2*>(&default_), reinterpret_cast<T2*>(&dst));
+			return dst;
+		}
+	}
+
 	template<class T, class V>
-	static inline V _or_nomask(const V& lhs, const V& rhs) throw() {
+	static inline V _or(const V& lhs, const V& rhs) throw() {
 		V dst;
 		detail::_or_nomask_implement<sizeof(V)>(&lhs, &rhs, &dst);
 		return dst;
 	}
 
+	template<class T, const uint64_t MASK, class V>
+	static inline V _or(const V& lhs, const V& rhs, const V& default_) throw() {
+		enum : uint64_t {
+			ALL_SET = detail::_default_mask<sizeof(V) / sizeof(T)>(),
+			MASK2 = MASK & ALL_SET
+		};
+		if constexpr (MASK2 == 0ull) {
+		} else if constexpr(MASK2 == ALL_SET) {
+		} else {
+			V dst;
+			typedef typename detail::_blend_type<sizeof(T)>::type T2;
+			detail::_or_implement<T2, sizeof(V) / sizeof(T2), MASK2>(reinterpret_cast<const T2*>(&lhs), reinterpret_cast<const T2*>(&rhs), reinterpret_cast<const T2*>(&default_), reinterpret_cast<T2*>(&dst));
+			return dst;
+		}
+	}
+
 	template<class T, class V>
-	static inline V _xor_nomask(const V& lhs, const V& rhs) throw() {
+	static inline V _xor(const V& lhs, const V& rhs) throw() {
 		V dst;
 		detail::_xor_nomask_implement<sizeof(V)>(&lhs, &rhs, &dst);
 		return dst;
+	}
+
+	template<class T, const uint64_t MASK, class V>
+	static inline V _xor(const V& lhs, const V& rhs, const V& default_) throw() {
+		enum : uint64_t {
+			ALL_SET = detail::_default_mask<sizeof(V) / sizeof(T)>(),
+			MASK2 = MASK & ALL_SET
+		};
+		if constexpr (MASK2 == 0ull) {
+		} else if constexpr(MASK2 == ALL_SET) {
+		} else {
+			V dst;
+			typedef typename detail::_blend_type<sizeof(T)>::type T2;
+			detail::_xor_implement<T2, sizeof(V) / sizeof(T2), MASK2>(reinterpret_cast<const T2*>(&lhs), reinterpret_cast<const T2*>(&rhs), reinterpret_cast<const T2*>(&default_), reinterpret_cast<T2*>(&dst));
+			return dst;
+		}
 	}
 
 	template<class T, const uint64_t MASK, class V>
