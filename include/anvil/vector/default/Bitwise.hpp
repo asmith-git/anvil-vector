@@ -101,16 +101,62 @@ namespace anvil { namespace vector {
 
 		template<class T, uint32_t SIZE, const uint64_t MASK>
 		static inline void _blend_implement(const T* const lhs, const T* const rhs, T* const dst) throw() {
-			//! \todo Optimise
-			if constexpr ((MASK & 1u) == 0u) {
-				*dst = *rhs;
-			} else {
-				*dst = *lhs;
+			if constexpr (SIZE >= 8u) {
+				_blend_implement<T, 8u, MASK>(lhs, rhs, dst);
+				if constexpr (SIZE > 8u) {
+					enum : uint64_t { MASK2 = MASK >> 8u };
+					_blend_implement<T, SIZE - 8u, MASK2>(lhs + 8u, rhs + 8u, dst + 8u);
+				}
+			} else if constexpr (SIZE >= 4u) {
+				_blend_implement<T, 4u, MASK>(lhs, rhs, dst);
+				if constexpr (SIZE > 4u) {
+					enum : uint64_t { MASK2 = MASK >> 4u };
+					_blend_implement<T, SIZE - 4u, MASK2>(lhs + 4u, rhs + 4u, dst + 4u);
+				}
+			} else if constexpr (SIZE >= 2u) {
+				_blend_implement<T, 2u, MASK>(lhs, rhs, dst);
+				if constexpr (SIZE > 2u) {
+					enum : uint64_t { MASK2 = MASK >> 2u };
+					_blend_implement<T, SIZE - 2u, MASK2>(lhs + 2u, rhs + 2u, dst + 2u);
+				}
+			} else if constexpr (SIZE >= 1u) {
+				//! \todo Optimise
+				if constexpr ((MASK & 1u) == 0u) {
+					*dst = *rhs;
+				} else {
+					*dst = *lhs;
+				}
 			}
-			if constexpr (SIZE > 1u) {
-				enum : uint64_t { MASK2 = MASK >> 1u };
-				_blend_implement<T, SIZE - 1u, MASK2>(lhs + 1u, rhs + 1u, dst + 1u);
-			}
+		}
+
+		template<>
+		static inline void _blend_implement<uint32_t, 2u, 3u>(const uint32_t* const lhs, const uint32_t* const rhs, uint32_t* const dst) throw() {
+			*reinterpret_cast<uint64_t*>(dst) = *reinterpret_cast<const uint64_t*>(lhs);
+		}
+
+		template<>
+		static inline void _blend_implement<uint16_t, 4u, 15u>(const uint16_t* const lhs, const uint16_t* const rhs, uint16_t* const dst) throw() {
+			*reinterpret_cast<uint64_t*>(dst) = *reinterpret_cast<const uint64_t*>(lhs);
+		}
+
+		template<>
+		static inline void _blend_implement<uint16_t, 2u, 3u>(const uint16_t* const lhs, const uint16_t* const rhs, uint16_t* const dst) throw() {
+			*reinterpret_cast<uint32_t*>(dst) = *reinterpret_cast<const uint32_t*>(lhs);
+		}
+
+		template<>
+		static inline void _blend_implement<uint8_t, 8u, 255u>(const uint8_t* const lhs, const uint8_t* const rhs, uint8_t* const dst) throw() {
+			*reinterpret_cast<uint64_t*>(dst) = *reinterpret_cast<const uint64_t*>(lhs);
+		}
+
+		template<>
+		static inline void _blend_implement<uint8_t, 4u, 15u>(const uint8_t* const lhs, const uint8_t* const rhs, uint8_t* const dst) throw() {
+			*reinterpret_cast<uint32_t*>(dst) = *reinterpret_cast<const uint32_t*>(lhs);
+		}
+
+		template<>
+		static inline void _blend_implement<uint8_t, 2u, 3u>(const uint8_t* const lhs, const uint8_t* const rhs, uint8_t* const dst) throw() {
+			*reinterpret_cast<uint16_t*>(dst) = *reinterpret_cast<const uint16_t*>(lhs);
 		}
 
 		template<uint32_t BYTES>
@@ -151,7 +197,9 @@ namespace anvil { namespace vector {
 			MASK2 = MASK & ALL_SET
 		};
 		if constexpr (MASK2 == 0ull) {
+			return default_;
 		} else if constexpr(MASK2 == ALL_SET) {
+			return _and<T,V>(lhs, rhs);
 		} else {
 			V dst;
 			typedef typename detail::_blend_type<sizeof(T)>::type T2;
@@ -174,7 +222,9 @@ namespace anvil { namespace vector {
 			MASK2 = MASK & ALL_SET
 		};
 		if constexpr (MASK2 == 0ull) {
+			return default_;
 		} else if constexpr(MASK2 == ALL_SET) {
+			return _or<T, V>(lhs, rhs);
 		} else {
 			V dst;
 			typedef typename detail::_blend_type<sizeof(T)>::type T2;
@@ -197,7 +247,9 @@ namespace anvil { namespace vector {
 			MASK2 = MASK & ALL_SET
 		};
 		if constexpr (MASK2 == 0ull) {
+			return default_;
 		} else if constexpr(MASK2 == ALL_SET) {
+			return _xor<T, V>(lhs, rhs);
 		} else {
 			V dst;
 			typedef typename detail::_blend_type<sizeof(T)>::type T2;
